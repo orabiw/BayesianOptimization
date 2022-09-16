@@ -5,7 +5,7 @@ import typing as t
 import numpy as np
 
 import scipy.stats
-from sklearn import gaussian_process
+import sklearn.gaussian_process
 
 RandomState = t.Union[int, np.random.RandomState, None]  # pylint:disable=no-member
 
@@ -23,9 +23,9 @@ def _predict(gp, X, lb, ub):
 
 def _create_regressor(
     random_state: RandomState,
-) -> gaussian_process.GaussianProcessRegressor:
-    return gaussian_process.GaussianProcessRegressor(
-        kernel=gaussian_process.kernels.Matern(nu=2.5),
+) -> sklearn.gaussian_process.GaussianProcessRegressor:
+    return sklearn.gaussian_process.GaussianProcessRegressor(
+        kernel=sklearn.gaussian_process.kernels.Matern(nu=2.5),
         alpha=1e-6,
         normalize_y=True,
         n_restarts_optimizer=5,
