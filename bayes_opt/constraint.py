@@ -1,22 +1,24 @@
 """ `bayes_opt.constraint` """
 # pylint: disable=invalid-name
+import typing as t
+
 import numpy as np
 
 import scipy.stats
 from sklearn import gaussian_process
 
+RandomState = t.Union[int, np.random.RandomState, None]  # pylint:disable=no-member
 
-def _basis_factory(random_state) -> gaussian_process.GaussianProcessRegressor:
-    def _basis():
-        return gaussian_process.GaussianProcessRegressor(
-            kernel=gaussian_process.kernels.Matern(nu=2.5),
-            alpha=1e-6,
-            normalize_y=True,
-            n_restarts_optimizer=5,
-            random_state=random_state,
-        )
 
-    return _basis
+def _predict(gp, X, lb, ub):
+    if lb == np.inf:
+        return np.array([0]), np.array([1])
+
+    y_mean, y_std = gp.predict(X, return_std=True)
+
+    return (
+        scipy.stats.norm(loc=y_mean, scale=y_std).cdf(boundary) for boundary in (lb, ub)
+    )
 
 
 class ConstraintModel:
@@ -52,36 +54,32 @@ class ConstraintModel:
     is a simply the product of the individual probabilities.
     """
 
-    def __init__(self, fun, lb, ub, random_state=None):
-        self.fun = fun
+    def __init__(
+        self,
+        fun: t.Callable,
+        lb: t.Union[float, np.ndarray],
+        ub: t.Union[float, np.ndarray],
+        random_state: RandomState = None,
+    ):
 
-        if isinstance(lb, float):
-            self._lb = np.array([lb])
-        else:
-            self._lb = lb
+        self.fun: t.Callable = fun
 
-        if isinstance(ub, float):
-            self._ub = np.array([ub])
-        else:
-            self._ub = ub
+        self.lb: np.ndarray = np.array([lb]) if isinstance(lb, float) else lb
+        self.ub: np.ndarray = np.array([ub]) if isinstance(ub, float) else ub
 
-        basis = _basis_factory(random_state)
-        self._model = [basis() for _ in range(len(self._lb))]
+        self.model_size = len(self.lb)
+        self.model = [
+            gaussian_process.GaussianProcessRegressor(
+                kernel=gaussian_process.kernels.Matern(nu=2.5),
+                alpha=1e-6,
+                normalize_y=True,
+                n_restarts_optimizer=5,
+                random_state=random_state,
+            )
+            for _ in range(self.model_size)
+        ]
 
-    @property
-    def lb(self):
-        """`lb`"""
-        return self._lb
-
-    @property
-    def ub(self):
-        """`ub`"""
-        return self._ub
-
-    @property
-    def model(self):
-        """`model`"""
-        return self._model
+        self.no_features = None
 
     def eval(self, **kwargs):
         """
@@ -92,10 +90,11 @@ class ConstraintModel:
         except TypeError as e:
             msg = (
                 "Encountered TypeError when evaluating constraint "
-                + "function. This could be because your constraint function "
-                + "doesn't use the same keyword arguments as the target "
-                + f"function. Original error message:\n\n{e}"
+                "function. This could be because your constraint function "
+                "doesn't use the same keyword arguments as the target "
+                f"function. Original error message:\n\n{e}"
             )
+
             e.args = (msg,)
             raise
 
@@ -103,11 +102,13 @@ class ConstraintModel:
         """
         Fits internal GaussianProcessRegressor's to the data.
         """
-        if len(self._model) == 1:
-            self._model[0].fit(X, Y)
+        if self.model_size == 1:
+            self.model[0].fit(X, Y)
         else:
-            for i, gp in enumerate(self._model):
+            for i, gp in enumerate(self.model):
                 gp.fit(X, Y[:, i])
+
+        self.no_features = self.model[0].n_features_in_
 
     def predict(self, X):
         """
@@ -119,42 +120,19 @@ class ConstraintModel:
         For the former, see `ConstraintModel.approx()`.
         """
         X_shape = X.shape
-        X = X.reshape((-1, self._model[0].n_features_in_))
-        if len(self._model) == 1:
-            y_mean, y_std = self._model[0].predict(X, return_std=True)
+        X = X.reshape((-1, self.no_features))
 
-            p_lower = (
-                scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._lb[0])
-                if self._lb[0] != -np.inf
-                else np.array([0])
-            )
-            p_upper = (
-                scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._ub[0])
-                if self._lb[0] != np.inf
-                else np.array([1])
-            )
+        if self.model_size == 1:
+            p_lower, p_upper = _predict(self.model[0], X, self.lb[0], self.ub[0])
             result = p_upper - p_lower
             return result.reshape(X_shape[:-1])
 
         result = np.ones(X.shape[0])
-
-        for j, gp in enumerate(self._model):
-            y_mean, y_std = gp.predict(X, return_std=True)
-
-            p_lower = (
-                scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._lb[j])
-                if self._lb[j] != -np.inf
-                else np.array([0])
-            )
-
-            p_upper = (
-                scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._ub[j])
-                if self._lb[j] != np.inf
-                else np.array([1])
-            )
-
+        for j, gp in enumerate(self.model):
+            p_lower, p_upper = _predict(gp, X, self.lb[j], self.ub[j])
             result = result * (p_upper - p_lower)
-            return result.reshape(X_shape[:-1])
+
+        return result.reshape(X_shape[:-1])
 
     def approx(self, X):
         """
@@ -162,23 +140,23 @@ class ConstraintModel:
         Gaussian Process Regressors.
         """
         X_shape = X.shape
-        X = X.reshape((-1, self._model[0].n_features_in_))
+        X = X.reshape((-1, self.no_features))
 
-        if len(self._model) == 1:
-            return self._model[0].predict(X).reshape(X_shape[:-1])
+        if self.model_size == 1:
+            return self.model[0].predict(X).reshape(X_shape[:-1])
 
-        result = np.column_stack([gp.predict(X) for gp in self._model])
-        return result.reshape(X_shape[:-1] + (len(self._lb),))
+        result = np.column_stack([gp.predict(X) for gp in self.model])
+        return result.reshape(X_shape[:-1] + (self.model_size,))
 
     def allowed(self, constraint_values):
         """
         Checks whether `constraint_values` are below the specified limits.
         """
-        if self._lb.size == 1:
-            return np.less_equal(self._lb, constraint_values) & np.less_equal(
-                constraint_values, self._ub
+        if self.lb.size == 1:
+            return np.less_equal(self.lb, constraint_values) & np.less_equal(
+                constraint_values, self.ub
             )
 
-        return np.all(constraint_values <= self._ub, axis=-1) & np.all(
-            constraint_values >= self._lb, axis=-1
+        return np.all(constraint_values <= self.ub, axis=-1) & np.all(
+            constraint_values >= self.lb, axis=-1
         )
