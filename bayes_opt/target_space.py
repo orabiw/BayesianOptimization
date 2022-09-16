@@ -1,14 +1,17 @@
+import typing as t
+
 import numpy as np
+
 from .util import ensure_rng
 from .constraint import ConstraintModel
 
 
 def _hashable(x):
-    """ ensure that an point is hashable by a python dict """
+    """ensure that an point is hashable by a python dict"""
     return tuple(map(float, x))
 
 
-class TargetSpace(object):
+class TargetSpace:
     """
     Holds the param-space coordinates (X) and target values (Y)
     Allows for constant-time appends while ensuring no duplicates are added
@@ -23,7 +26,13 @@ class TargetSpace(object):
     >>> y = space.register_point(x)
     >>> assert self.max_point()['max_val'] == y
     """
-    def __init__(self, target_func, pbounds, random_state=None):
+
+    def __init__(
+        self,
+        target_func,
+        pbounds,
+        random_state: t.Optional[t.Union[int, np.random.RandomState]] = None,
+    ):
         """
         Parameters
         ----------
@@ -47,7 +56,7 @@ class TargetSpace(object):
         # Create an array with parameters bounds
         self._bounds = np.array(
             [item[1] for item in sorted(pbounds.items(), key=lambda x: x[0])],
-            dtype=float
+            dtype=float,
         )
 
         # preallocated memory for X and Y points
@@ -93,8 +102,8 @@ class TargetSpace(object):
             assert set(params) == set(self.keys)
         except AssertionError:
             raise ValueError(
-                "Parameters' keys ({}) do ".format(sorted(params)) +
-                "not match the expected set of keys ({}).".format(self.keys)
+                "Parameters' keys ({}) do ".format(sorted(params))
+                + "not match the expected set of keys ({}).".format(self.keys)
             )
         return np.asarray([params[key] for key in self.keys])
 
@@ -103,8 +112,8 @@ class TargetSpace(object):
             assert len(x) == len(self.keys)
         except AssertionError:
             raise ValueError(
-                "Size of array ({}) is different than the ".format(len(x)) +
-                "expected number of parameters ({}).".format(len(self.keys))
+                "Size of array ({}) is different than the ".format(len(x))
+                + "expected number of parameters ({}).".format(len(self.keys))
             )
         return dict(zip(self.keys, x))
 
@@ -119,8 +128,9 @@ class TargetSpace(object):
             assert x.size == self.dim
         except AssertionError:
             raise ValueError(
-                "Size of array ({}) is different than the ".format(len(x)) +
-                "expected number of parameters ({}).".format(len(self.keys)))
+                "Size of array ({}) is different than the ".format(len(x))
+                + "expected number of parameters ({}).".format(len(self.keys))
+            )
         return x
 
     def register(self, params, target):
@@ -158,7 +168,7 @@ class TargetSpace(object):
         """
         x = self._as_array(params)
         if x in self:
-            raise KeyError('Data point {} is not unique'.format(x))
+            raise KeyError("Data point {} is not unique".format(x))
 
         # Insert data into unique dictionary
         self._cache[_hashable(x.ravel())] = target
@@ -221,10 +231,8 @@ class TargetSpace(object):
         """Get maximum target value found and corresponding parameters."""
         try:
             res = {
-                'target': self.target.max(),
-                'params': dict(
-                    zip(self.keys, self.params[self.target.argmax()])
-                )
+                "target": self.target.max(),
+                "params": dict(zip(self.keys, self.params[self.target.argmax()])),
             }
         except ValueError:
             res = {}
@@ -257,11 +265,10 @@ class ConstrainedTargetSpace(TargetSpace):
     """
     Expands TargetSpace to incorporate constraints.
     """
-    def __init__(self,
-                 target_func,
-                 constraint: ConstraintModel,
-                 pbounds,
-                 random_state=None):
+
+    def __init__(
+        self, target_func, constraint: ConstraintModel, pbounds, random_state=None
+    ):
         super().__init__(target_func, pbounds, random_state)
 
         self._constraint = constraint
@@ -270,7 +277,9 @@ class ConstrainedTargetSpace(TargetSpace):
         if constraint.lb.size == 1:
             self._constraint_values = np.empty(shape=(0), dtype=float)
         else:
-            self._constraint_values = np.empty(shape=(0, constraint.lb.size), dtype=float)
+            self._constraint_values = np.empty(
+                shape=(0, constraint.lb.size), dtype=float
+            )
 
     @property
     def constraint(self):
@@ -283,15 +292,16 @@ class ConstrainedTargetSpace(TargetSpace):
     def register(self, params, target, constraint_value):
         x = self._as_array(params)
         if x in self:
-            raise KeyError('Data point {} is not unique'.format(x))
+            raise KeyError("Data point {} is not unique".format(x))
 
         # Insert data into unique dictionary
         self._cache[_hashable(x.ravel())] = (target, constraint_value)
 
         self._params = np.concatenate([self._params, x.reshape(1, -1)])
         self._target = np.concatenate([self._target, [target]])
-        self._constraint_values = np.concatenate([self._constraint_values,
-                                                 [constraint_value]])
+        self._constraint_values = np.concatenate(
+            [self._constraint_values, [constraint_value]]
+        )
 
     def probe(self, params):
         x = self._as_array(params)
@@ -316,23 +326,16 @@ class ConstrainedTargetSpace(TargetSpace):
             idx = sorted[allowed[sorted]][-1]
             # there must be a better way to do this, right?
             res = {
-                'target': self.target[idx],
-                'params': dict(
-                    zip(self.keys, self.params[idx])
-                ),
-                'constraint': self._constraint_values[idx]
+                "target": self.target[idx],
+                "params": dict(zip(self.keys, self.params[idx])),
+                "constraint": self._constraint_values[idx],
             }
         else:
-            res = {
-                'target': None,
-                'params': None,
-                'constraint': None
-            }
+            res = {"target": None, "params": None, "constraint": None}
         return res
 
     def res(self):
-        """Get all target values and constraint fulfillment for all parameters.
-        """
+        """Get all target values and constraint fulfillment for all parameters."""
         params = [dict(zip(self.keys, p)) for p in self.params]
 
         return [
@@ -340,12 +343,12 @@ class ConstrainedTargetSpace(TargetSpace):
                 "target": target,
                 "constraint": constraint_value,
                 "params": param,
-                "allowed": allowed
+                "allowed": allowed,
             }
             for target, constraint_value, param, allowed in zip(
                 self.target,
                 self._constraint_values,
                 params,
-                self._constraint.allowed(self._constraint_values)
-                )
+                self._constraint.allowed(self._constraint_values),
+            )
         ]

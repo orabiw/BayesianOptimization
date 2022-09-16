@@ -6,6 +6,7 @@ from .observer import _Tracker
 from .event import Events
 from .util import Colours
 
+
 def _get_default_logger(verbose):
     return ScreenLogger(verbose=verbose)
 
@@ -29,10 +30,10 @@ class ScreenLogger(_Tracker):
 
     def _format_number(self, x):
         if isinstance(x, int):
-                s = "{x:<{s}}".format(
-                    x=x,
-                    s=self._default_cell_size,
-                )
+            s = "{x:<{s}}".format(
+                x=x,
+                s=self._default_cell_size,
+            )
         else:
             s = "{x:<{s}.{p}}".format(
                 x=x,
@@ -42,18 +43,15 @@ class ScreenLogger(_Tracker):
 
         if len(s) > self._default_cell_size:
             if "." in s:
-                return s[:self._default_cell_size]
+                return s[: self._default_cell_size]
             else:
-                return s[:self._default_cell_size - 3] + "..."
+                return s[: self._default_cell_size - 3] + "..."
         return s
 
     def _format_key(self, key):
-        s = "{key:^{s}}".format(
-            key=key,
-            s=self._default_cell_size
-        )
+        s = "{key:^{s}}".format(key=key, s=self._default_cell_size)
         if len(s) > self._default_cell_size:
-            return s[:self._default_cell_size - 3] + "..."
+            return s[: self._default_cell_size - 3] + "..."
         return s
 
     def _step(self, instance, colour=Colours.black):

@@ -25,8 +25,7 @@ class _Tracker(object):
             self._iterations += 1
 
             current_max = instance.max
-            if (self._previous_max is None
-                    or current_max["target"] > self._previous_max):
+            if self._previous_max is None or current_max["target"] > self._previous_max:
                 self._previous_max = current_max["target"]
                 self._previous_max_params = current_max["params"]
 
@@ -44,5 +43,5 @@ class _Tracker(object):
         return (
             now.strftime("%Y-%m-%d %H:%M:%S"),
             time_elapsed.total_seconds(),
-            time_delta.total_seconds()
+            time_delta.total_seconds(),
         )

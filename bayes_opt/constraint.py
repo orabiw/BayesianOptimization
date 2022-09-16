@@ -4,7 +4,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from scipy.stats import norm
 
 
-class ConstraintModel():
+class ConstraintModel:
     """
     This class takes the function to optimize as well as the parameters bounds
     in order to find which values for the parameters yield the maximum value
@@ -44,13 +44,12 @@ class ConstraintModel():
             self._lb = np.array([lb])
         else:
             self._lb = lb
-        
+
         if isinstance(ub, float):
             self._ub = np.array([ub])
         else:
             self._ub = ub
-        
-        
+
         basis = lambda: GaussianProcessRegressor(
             kernel=Matern(nu=2.5),
             alpha=1e-6,
@@ -67,7 +66,7 @@ class ConstraintModel():
     @property
     def ub(self):
         return self._ub
-    
+
     @property
     def model(self):
         return self._model
@@ -80,11 +79,11 @@ class ConstraintModel():
             return self.fun(**kwargs)
         except TypeError as e:
             msg = (
-                "Encountered TypeError when evaluating constraint " +
-                "function. This could be because your constraint function " +
-                "doesn't use the same keyword arguments as the target " +
-                f"function. Original error message:\n\n{e}"
-                )
+                "Encountered TypeError when evaluating constraint "
+                + "function. This could be because your constraint function "
+                + "doesn't use the same keyword arguments as the target "
+                + f"function. Original error message:\n\n{e}"
+            )
             e.args = (msg,)
             raise
 
@@ -112,20 +111,32 @@ class ConstraintModel():
         if len(self._model) == 1:
             y_mean, y_std = self._model[0].predict(X, return_std=True)
 
-            p_lower = (norm(loc=y_mean, scale=y_std).cdf(self._lb[0])
-                            if self._lb[0] != -np.inf else np.array([0]))
-            p_upper = (norm(loc=y_mean, scale=y_std).cdf(self._ub[0])
-                            if self._lb[0] != np.inf else np.array([1]))
+            p_lower = (
+                norm(loc=y_mean, scale=y_std).cdf(self._lb[0])
+                if self._lb[0] != -np.inf
+                else np.array([0])
+            )
+            p_upper = (
+                norm(loc=y_mean, scale=y_std).cdf(self._ub[0])
+                if self._lb[0] != np.inf
+                else np.array([1])
+            )
             result = p_upper - p_lower
             return result.reshape(X_shape[:-1])
         else:
             result = np.ones(X.shape[0])
             for j, gp in enumerate(self._model):
                 y_mean, y_std = gp.predict(X, return_std=True)
-                p_lower = (norm(loc=y_mean, scale=y_std).cdf(self._lb[j])
-                           if self._lb[j] != -np.inf else np.array([0]))
-                p_upper = (norm(loc=y_mean, scale=y_std).cdf(self._ub[j])
-                           if self._lb[j] != np.inf else np.array([1]))
+                p_lower = (
+                    norm(loc=y_mean, scale=y_std).cdf(self._lb[j])
+                    if self._lb[j] != -np.inf
+                    else np.array([0])
+                )
+                p_upper = (
+                    norm(loc=y_mean, scale=y_std).cdf(self._ub[j])
+                    if self._lb[j] != np.inf
+                    else np.array([1])
+                )
                 result = result * (p_upper - p_lower)
             return result.reshape(X_shape[:-1])
 
@@ -140,15 +151,17 @@ class ConstraintModel():
             return self._model[0].predict(X).reshape(X_shape[:-1])
         else:
             result = np.column_stack([gp.predict(X) for gp in self._model])
-            return result.reshape(X_shape[:-1] + (len(self._lb), ))
+            return result.reshape(X_shape[:-1] + (len(self._lb),))
 
     def allowed(self, constraint_values):
         """
         Checks whether `constraint_values` are below the specified limits.
         """
         if self._lb.size == 1:
-            return (np.less_equal(self._lb, constraint_values)
-                    & np.less_equal(constraint_values, self._ub))
+            return np.less_equal(self._lb, constraint_values) & np.less_equal(
+                constraint_values, self._ub
+            )
 
-        return (np.all(constraint_values <= self._ub, axis=-1)
-                    & np.all(constraint_values >= self._lb, axis=-1))
+        return np.all(constraint_values <= self._ub, axis=-1) & np.all(
+            constraint_values >= self._lb, axis=-1
+        )

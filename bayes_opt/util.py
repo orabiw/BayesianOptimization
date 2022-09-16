@@ -1,10 +1,20 @@
+import typing as t
 import warnings
 import numpy as np
 from scipy.stats import norm
 from scipy.optimize import minimize
 
 
-def acq_max(ac, gp, y_max, bounds, random_state, constraint=None, n_warmup=10000, n_iter=10):
+def acq_max(
+    ac,
+    gp,
+    y_max,
+    bounds,
+    random_state,
+    constraint=None,
+    n_warmup=10000,
+    n_iter=10,
+):
     """
     A function to find the maximum of the acquisition function
 
@@ -44,17 +54,20 @@ def acq_max(ac, gp, y_max, bounds, random_state, constraint=None, n_warmup=10000
     """
 
     # Warm up with random points
-    x_tries = random_state.uniform(bounds[:, 0], bounds[:, 1],
-                                   size=(n_warmup, bounds.shape[0]))
+    x_tries = random_state.uniform(
+        bounds[:, 0], bounds[:, 1], size=(n_warmup, bounds.shape[0])
+    )
     ys = ac(x_tries, gp=gp, y_max=y_max)
     x_max = x_tries[ys.argmax()]
     max_acq = ys.max()
 
     # Explore the parameter space more throughly
-    x_seeds = random_state.uniform(bounds[:, 0], bounds[:, 1],
-                                   size=(n_iter, bounds.shape[0]))
+    x_seeds = random_state.uniform(
+        bounds[:, 0], bounds[:, 1], size=(n_iter, bounds.shape[0])
+    )
 
     if constraint is not None:
+
         def to_minimize(x):
             target = -ac(x.reshape(1, -1), gp=gp, y_max=y_max)
             p_constraint = constraint.predict(x.reshape(1, -1))
@@ -69,15 +82,15 @@ def acq_max(ac, gp, y_max, bounds, random_state, constraint=None, n_warmup=10000
                 return target * p_constraint
             else:
                 return target / (0.5 + p_constraint)
+
     else:
         to_minimize = lambda x: -ac(x.reshape(1, -1), gp=gp, y_max=y_max)
 
     for x_try in x_seeds:
         # Find the minimum of minus the acquisition function
-        res = minimize(lambda x: to_minimize(x),
-                       x_try,
-                       bounds=bounds,
-                       method="L-BFGS-B")
+        res = minimize(
+            lambda x: to_minimize(x), x_try, bounds=bounds, method="L-BFGS-B"
+        )
 
         # See if success
         if not res.success:
@@ -108,10 +121,12 @@ class UtilityFunction(object):
 
         self._iters_counter = 0
 
-        if kind not in ['ucb', 'ei', 'poi']:
-            err = "The utility function " \
-                  "{} has not been implemented, " \
-                  "please choose one of ucb, ei, or poi.".format(kind)
+        if kind not in ["ucb", "ei", "poi"]:
+            err = (
+                "The utility function "
+                "{} has not been implemented, "
+                "please choose one of ucb, ei, or poi.".format(kind)
+            )
             raise NotImplementedError(err)
         else:
             self.kind = kind
@@ -123,11 +138,11 @@ class UtilityFunction(object):
             self.kappa *= self._kappa_decay
 
     def utility(self, x, gp, y_max):
-        if self.kind == 'ucb':
+        if self.kind == "ucb":
             return self._ucb(x, gp, self.kappa)
-        if self.kind == 'ei':
+        if self.kind == "ei":
             return self._ei(x, gp, y_max, self.xi)
-        if self.kind == 'poi':
+        if self.kind == "poi":
             return self._poi(x, gp, y_max, self.xi)
 
     @staticmethod
@@ -144,7 +159,7 @@ class UtilityFunction(object):
             warnings.simplefilter("ignore")
             mean, std = gp.predict(x, return_std=True)
 
-        a = (mean - y_max - xi)
+        a = mean - y_max - xi
         z = a / std
         return a * norm.cdf(z) + std * norm.pdf(z)
 
@@ -154,14 +169,12 @@ class UtilityFunction(object):
             warnings.simplefilter("ignore")
             mean, std = gp.predict(x, return_std=True)
 
-        z = (mean - y_max - xi)/std
+        z = (mean - y_max - xi) / std
         return norm.cdf(z)
 
 
 def load_logs(optimizer, logs):
-    """Load previous ...
-
-    """
+    """Load previous ..."""
     import json
 
     if isinstance(logs, str):
@@ -187,34 +200,36 @@ def load_logs(optimizer, logs):
     return optimizer
 
 
-def ensure_rng(random_state=None):
+def ensure_rng(
+    random_state: t.Optional[t.Union[int, np.random.RandomState]] = None
+) -> np.random.RandomState:
     """
     Creates a random number generator based on an optional seed.  This can be
     an integer or another random state for a seeded rng, or None for an
     unseeded rng.
     """
-    if random_state is None:
-        random_state = np.random.RandomState()
-    elif isinstance(random_state, int):
-        random_state = np.random.RandomState(random_state)
-    else:
-        assert isinstance(random_state, np.random.RandomState)
-    return random_state
+    if isinstance(random_state, np.random.RandomState):
+        return random_state
+
+    if random_state is None or isinstance(random_state, int):
+        return np.random.RandomState(random_state)
+
+    raise ValueError("Invalid random_state")
 
 
 class Colours:
     """Print in nice colours."""
 
-    BLUE = '\033[94m'
-    BOLD = '\033[1m'
-    CYAN = '\033[96m'
-    DARKCYAN = '\033[36m'
-    END = '\033[0m'
-    GREEN = '\033[92m'
-    PURPLE = '\033[95m'
-    RED = '\033[91m'
-    UNDERLINE = '\033[4m'
-    YELLOW = '\033[93m'
+    BLUE = "\033[94m"
+    BOLD = "\033[1m"
+    CYAN = "\033[96m"
+    DARKCYAN = "\033[36m"
+    END = "\033[0m"
+    GREEN = "\033[92m"
+    PURPLE = "\033[95m"
+    RED = "\033[91m"
+    UNDERLINE = "\033[4m"
+    YELLOW = "\033[93m"
 
     @classmethod
     def _wrap_colour(cls, s, colour):

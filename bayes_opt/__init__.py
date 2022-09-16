@@ -6,7 +6,7 @@ from .constraint import ConstraintModel
 
 __all__ = [
     "BayesianOptimization",
-    "ConstraintModel"
+    "ConstraintModel",
     "UtilityFunction",
     "Events",
     "ScreenLogger",
