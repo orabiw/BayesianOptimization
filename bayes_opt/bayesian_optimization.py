@@ -7,12 +7,11 @@ import numpy as np
 from sklearn.gaussian_process.kernels import Matern
 from sklearn.gaussian_process import GaussianProcessRegressor
 
-from bayes_opt.constraint import ConstraintModel
-from bayes_opt.domain_reduction import DomainTransformer
-from bayes_opt.event import Events, DEFAULT_EVENTS
-from bayes_opt.logger import _get_default_logger
-from bayes_opt.target_space import TargetSpace, ConstrainedTargetSpace
-from bayes_opt.util import UtilityFunction, acq_max, ensure_rng
+import bayes_opt.constraint
+import bayes_opt.event
+import bayes_opt.util
+
+from bayes_opt import domain_reduction, logger, target_space
 
 
 class Observable:
@@ -90,12 +89,14 @@ class BayesianOptimization(Observable):
         self,
         f: t.Callable,
         pbounds: t.Dict[str, t.Tuple[t.Union[int, float], t.Union[int, float]]],
-        constraint: t.Optional[ConstraintModel] = None,
+        constraint: t.Optional[bayes_opt.constraint.ConstraintModel] = None,
         random_state: t.Optional[t.Union[int, np.random.RandomState]] = None,
         verbose: int = 2,
-        bounds_transformer: t.Optional[DomainTransformer] = None,
+        bounds_transformer: t.Optional[domain_reduction.DomainTransformer] = None,
     ):
-        self._random_state: np.random.RandomState = ensure_rng(random_state)
+        self._random_state: np.random.RandomState = bayes_opt.util.ensure_rng(
+            random_state
+        )
 
         self._queue: Queue = Queue()
 
@@ -112,14 +113,16 @@ class BayesianOptimization(Observable):
             # Data structure containing the function to be optimized, the
             # bounds of its domain, and a record of the evaluations we have
             # done so far
-            self._space = TargetSpace(f, pbounds, random_state)
+            self._space = target_space.TargetSpace(f, pbounds, random_state)
             self.is_constrained = False
         else:
-            constraint_ = ConstraintModel(
+            constraint_ = bayes_opt.constraint.ConstraintModel(
                 constraint.fun, constraint.lb, constraint.ub, random_state=random_state
             )
 
-            self._space = ConstrainedTargetSpace(f, constraint_, pbounds, random_state)
+            self._space = target_space.ConstrainedTargetSpace(
+                f, constraint_, pbounds, random_state
+            )
             self.is_constrained = True
 
         self._verbose = verbose
@@ -133,15 +136,17 @@ class BayesianOptimization(Observable):
                     'The transformer must be an instance of "DomainTransformer"'
                 ) from error
 
-        super().__init__(events=DEFAULT_EVENTS)
+        super().__init__(events=bayes_opt.event.DEFAULT_EVENTS)
 
     @property
-    def space(self) -> TargetSpace:
+    def space(self) -> target_space.TargetSpace:
         return self._space
 
     @property
-    def constraint(self) -> t.Optional[ConstraintModel]:
-        if self.is_constrained and isinstance(self._space, ConstrainedTargetSpace):
+    def constraint(self) -> t.Optional[bayes_opt.constraint.ConstraintModel]:
+        if self.is_constrained and isinstance(
+            self._space, target_space.ConstrainedTargetSpace
+        ):
             return self._space.constraint
 
         return None
@@ -157,7 +162,7 @@ class BayesianOptimization(Observable):
     def register(self, params, target):
         """Expect observation with known target"""
         self._space.register(params, target)
-        self.dispatch(Events.OPTIMIZATION_STEP)
+        self.dispatch(bayes_opt.event.Events.OPTIMIZATION_STEP)
 
     def probe(self, params, lazy=True):
         """
@@ -177,7 +182,7 @@ class BayesianOptimization(Observable):
             self._queue.put(params)
         else:
             self._space.probe(params)
-            self.dispatch(Events.OPTIMIZATION_STEP)
+            self.dispatch(bayes_opt.event.Events.OPTIMIZATION_STEP)
 
     def suggest(self, utility_function):
         """Most promising point to probe next"""
@@ -193,7 +198,7 @@ class BayesianOptimization(Observable):
                 self.constraint.fit(self._space.params, self._space._constraint_values)
 
         # Finding argmax of the acquisition function.
-        suggestion = acq_max(
+        suggestion = bayes_opt.util.acq_max(
             ac=utility_function.utility,
             gp=self._gp,
             constraint=self.constraint,
@@ -214,10 +219,10 @@ class BayesianOptimization(Observable):
 
     def _prime_subscriptions(self):
         if not any([len(subs) for subs in self._events.values()]):
-            _logger = _get_default_logger(self._verbose)
-            self.subscribe(Events.OPTIMIZATION_START, _logger)
-            self.subscribe(Events.OPTIMIZATION_STEP, _logger)
-            self.subscribe(Events.OPTIMIZATION_END, _logger)
+            _logger = logger._get_default_logger(self._verbose)
+            self.subscribe(bayes_opt.event.Events.OPTIMIZATION_START, _logger)
+            self.subscribe(bayes_opt.event.Events.OPTIMIZATION_STEP, _logger)
+            self.subscribe(bayes_opt.event.Events.OPTIMIZATION_END, _logger)
 
     def maximize(  # pylint:disable=too-many-arguments
         self,
@@ -267,11 +272,11 @@ class BayesianOptimization(Observable):
             [unused]
         """
         self._prime_subscriptions()
-        self.dispatch(Events.OPTIMIZATION_START)
+        self.dispatch(bayes_opt.event.Events.OPTIMIZATION_START)
         self._prime_queue(init_points)
         self.set_gp_params(**gp_params)
 
-        util = UtilityFunction(
+        util = bayes_opt.util.UtilityFunction(
             kind=acq,
             kappa=kappa,
             xi=xi,
@@ -293,7 +298,7 @@ class BayesianOptimization(Observable):
                 # the init_points points (only for the true iterations)
                 self.set_bounds(self._bounds_transformer.transform(self._space))
 
-        self.dispatch(Events.OPTIMIZATION_END)
+        self.dispatch(bayes_opt.event.Events.OPTIMIZATION_END)
 
     def set_bounds(self, new_bounds):
         """

@@ -1,8 +1,9 @@
 import typing as t
 import warnings
 import numpy as np
-from scipy.stats import norm
-from scipy.optimize import minimize
+
+import scipy.stats
+import scipy.optimize
 
 
 def acq_max(
@@ -88,7 +89,7 @@ def acq_max(
 
     for x_try in x_seeds:
         # Find the minimum of minus the acquisition function
-        res = minimize(
+        res = scipy.optimize.minimize(
             lambda x: to_minimize(x), x_try, bounds=bounds, method="L-BFGS-B"
         )
 
@@ -161,7 +162,7 @@ class UtilityFunction(object):
 
         a = mean - y_max - xi
         z = a / std
-        return a * norm.cdf(z) + std * norm.pdf(z)
+        return a * scipy.stats.norm.cdf(z) + std * scipy.stats.norm.pdf(z)
 
     @staticmethod
     def _poi(x, gp, y_max, xi):
@@ -170,7 +171,7 @@ class UtilityFunction(object):
             mean, std = gp.predict(x, return_std=True)
 
         z = (mean - y_max - xi) / std
-        return norm.cdf(z)
+        return scipy.stats.norm.cdf(z)
 
 
 def load_logs(optimizer, logs):
@@ -200,7 +201,7 @@ def load_logs(optimizer, logs):
     return optimizer
 
 
-def ensure_rng(
+def ensure_rng(  # pylint:disable=no-member
     random_state: t.Optional[t.Union[int, np.random.RandomState]] = None
 ) -> np.random.RandomState:
     """

@@ -2,8 +2,8 @@ import typing as t
 
 import numpy as np
 
-from .util import ensure_rng
-from .constraint import ConstraintModel
+import bayes_opt.util
+import bayes_opt.constraint
 
 
 def _hashable(x):
@@ -27,7 +27,7 @@ class TargetSpace:
     >>> assert self.max_point()['max_val'] == y
     """
 
-    def __init__(
+    def __init__(  # pylint:disable=no-member
         self,
         target_func,
         pbounds,
@@ -46,7 +46,7 @@ class TargetSpace:
         random_state : int, RandomState, or None
             optionally specify a seed for a random number generator
         """
-        self.random_state = ensure_rng(random_state)
+        self.random_state = bayes_opt.util.ensure_rng(random_state)
 
         # The function to be optimized
         self.target_func = target_func
@@ -267,7 +267,11 @@ class ConstrainedTargetSpace(TargetSpace):
     """
 
     def __init__(
-        self, target_func, constraint: ConstraintModel, pbounds, random_state=None
+        self,
+        target_func,
+        constraint: bayes_opt.constraint.ConstraintModel,
+        pbounds,
+        random_state=None,
     ):
         super().__init__(target_func, pbounds, random_state)
 

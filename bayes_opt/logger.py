@@ -2,16 +2,16 @@ from __future__ import print_function
 import os
 import json
 
-from .observer import _Tracker
-from .event import Events
-from .util import Colours
+import bayes_opt.observer
+import bayes_opt.event
+import bayes_opt.util
 
 
 def _get_default_logger(verbose):
     return ScreenLogger(verbose=verbose)
 
 
-class ScreenLogger(_Tracker):
+class ScreenLogger(bayes_opt.observer._Tracker):
     _default_cell_size = 9
     _default_precision = 4
 
@@ -54,7 +54,7 @@ class ScreenLogger(_Tracker):
             return s[: self._default_cell_size - 3] + "..."
         return s
 
-    def _step(self, instance, colour=Colours.black):
+    def _step(self, instance, colour=bayes_opt.util.Colours.black):
         res = instance.res[-1]
         cells = []
 
@@ -88,16 +88,20 @@ class ScreenLogger(_Tracker):
         return instance.max["target"] > self._previous_max
 
     def update(self, event, instance):
-        if event == Events.OPTIMIZATION_START:
+        if event == bayes_opt.event.Events.OPTIMIZATION_START:
             line = self._header(instance) + "\n"
-        elif event == Events.OPTIMIZATION_STEP:
+        elif event == bayes_opt.event.Events.OPTIMIZATION_STEP:
             is_new_max = self._is_new_max(instance)
             if self._verbose == 1 and not is_new_max:
                 line = ""
             else:
-                colour = Colours.purple if is_new_max else Colours.black
+                if is_new_max:
+                    colour = bayes_opt.util.Colours.purple
+                else:
+                    colour = bayes_opt.util.Colours.black
+
                 line = self._step(instance, colour=colour) + "\n"
-        elif event == Events.OPTIMIZATION_END:
+        elif event == bayes_opt.event.Events.OPTIMIZATION_END:
             line = "=" * self._header_length + "\n"
 
         if self._verbose:
@@ -105,7 +109,7 @@ class ScreenLogger(_Tracker):
         self._update_tracker(event, instance)
 
 
-class JSONLogger(_Tracker):
+class JSONLogger(bayes_opt.observer._Tracker):
     def __init__(self, path, reset=True):
         self._path = path if path[-5:] == ".json" else path + ".json"
         if reset:
@@ -116,7 +120,7 @@ class JSONLogger(_Tracker):
         super(JSONLogger, self).__init__()
 
     def update(self, event, instance):
-        if event == Events.OPTIMIZATION_STEP:
+        if event == bayes_opt.event.Events.OPTIMIZATION_STEP:
             data = dict(instance.res[-1])
 
             now, time_elapsed, time_delta = self._time_metrics()

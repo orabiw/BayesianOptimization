@@ -1,7 +1,7 @@
 import numpy as np
-from sklearn.gaussian_process.kernels import Matern
-from sklearn.gaussian_process import GaussianProcessRegressor
-from scipy.stats import norm
+
+import scipy.stats
+from sklearn import gaussian_process
 
 
 class ConstraintModel:
@@ -50,8 +50,8 @@ class ConstraintModel:
         else:
             self._ub = ub
 
-        basis = lambda: GaussianProcessRegressor(
-            kernel=Matern(nu=2.5),
+        basis = lambda: gaussian_process.GaussianProcessRegressor(
+            kernel=gaussian_process.kernels.Matern(nu=2.5),
             alpha=1e-6,
             normalize_y=True,
             n_restarts_optimizer=5,
@@ -112,12 +112,12 @@ class ConstraintModel:
             y_mean, y_std = self._model[0].predict(X, return_std=True)
 
             p_lower = (
-                norm(loc=y_mean, scale=y_std).cdf(self._lb[0])
+                scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._lb[0])
                 if self._lb[0] != -np.inf
                 else np.array([0])
             )
             p_upper = (
-                norm(loc=y_mean, scale=y_std).cdf(self._ub[0])
+                scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._ub[0])
                 if self._lb[0] != np.inf
                 else np.array([1])
             )
@@ -128,12 +128,12 @@ class ConstraintModel:
             for j, gp in enumerate(self._model):
                 y_mean, y_std = gp.predict(X, return_std=True)
                 p_lower = (
-                    norm(loc=y_mean, scale=y_std).cdf(self._lb[j])
+                    scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._lb[j])
                     if self._lb[j] != -np.inf
                     else np.array([0])
                 )
                 p_upper = (
-                    norm(loc=y_mean, scale=y_std).cdf(self._ub[j])
+                    scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._ub[j])
                     if self._lb[j] != np.inf
                     else np.array([1])
                 )
