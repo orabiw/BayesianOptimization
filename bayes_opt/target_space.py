@@ -64,7 +64,7 @@ class TargetSpace:
         self._target = np.empty(shape=(0))
 
         # keep track of unique points we have seen so far
-        self._cache = {}
+        self._cache: t.Dict[t.Tuple[float], float] = {}
 
     def __contains__(self, x):
         return _hashable(x) in self._cache

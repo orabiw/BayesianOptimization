@@ -28,7 +28,7 @@ class SequentialDomainReductionTransformer(DomainTransformer):
         gamma_osc: float = 0.7,
         gamma_pan: float = 1.0,
         eta: float = 0.9,
-        minimum_window: Optional[Union[List[float], float]] = 0.0,
+        minimum_window: Optional[Union[List[Optional[float]], float]] = 0.0,
     ) -> None:
         self.gamma_osc = gamma_osc
         self.gamma_pan = gamma_pan
@@ -94,7 +94,7 @@ class SequentialDomainReductionTransformer(DomainTransformer):
 
         self.r = self.contraction_rate * self.r
 
-    def _trim(self, new_bounds: np.array, global_bounds: np.array) -> np.array:
+    def _trim(self, new_bounds: np.ndarray, global_bounds: np.ndarray) -> np.ndarray:
         for i, variable in enumerate(new_bounds):
             if variable[0] < global_bounds[i, 0]:
                 variable[0] = global_bounds[i, 0]
@@ -111,7 +111,7 @@ class SequentialDomainReductionTransformer(DomainTransformer):
 
         return new_bounds
 
-    def _create_bounds(self, parameters: dict, bounds: np.array) -> dict:
+    def _create_bounds(self, parameters: dict, bounds: np.ndarray) -> dict:
         return {param: bounds[i, :] for i, param in enumerate(parameters)}
 
     def transform(self, target_space: TargetSpace) -> dict:

@@ -97,7 +97,7 @@ class BayesianOptimization(Observable):
     ):
         self._random_state: np.random.RandomState = ensure_rng(random_state)
 
-        self._queue = Queue()
+        self._queue: Queue = Queue()
 
         # Internal GP regressor
         self._gp = GaussianProcessRegressor(
@@ -125,7 +125,7 @@ class BayesianOptimization(Observable):
         self._verbose = verbose
         self._bounds_transformer = bounds_transformer
 
-        if bounds_transformer:
+        if self._bounds_transformer:
             try:
                 self._bounds_transformer.initialize(self._space)
             except (AttributeError, TypeError) as error:
@@ -141,7 +141,7 @@ class BayesianOptimization(Observable):
 
     @property
     def constraint(self) -> t.Optional[ConstraintModel]:
-        if self.is_constrained:
+        if self.is_constrained and isinstance(self._space, ConstrainedTargetSpace):
             return self._space.constraint
 
         return None
