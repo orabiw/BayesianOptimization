@@ -1,12 +1,15 @@
+""" `bayes_opt.util` """
+# pylint:disable=invalid-name
+import json
 import typing as t
 import warnings
-import numpy as np
 
+import numpy as np
 import scipy.stats
 import scipy.optimize
 
 
-def acq_max(
+def acq_max(  # pylint:disable=too-many-arguments,too-many-locals
     ac,
     gp,
     y_max,
@@ -81,16 +84,18 @@ def acq_max(
             # depending on the probability estimate to fulfill the constraint.
             if target < 0:
                 return target * p_constraint
-            else:
-                return target / (0.5 + p_constraint)
+
+            return target / (0.5 + p_constraint)
 
     else:
-        to_minimize = lambda x: -ac(x.reshape(1, -1), gp=gp, y_max=y_max)
+
+        def to_minimize(x):
+            return -ac(x.reshape(1, -1), gp=gp, y_max=y_max)
 
     for x_try in x_seeds:
         # Find the minimum of minus the acquisition function
         res = scipy.optimize.minimize(
-            lambda x: to_minimize(x), x_try, bounds=bounds, method="L-BFGS-B"
+            to_minimize, x_try, bounds=bounds, method="L-BFGS-B"
         )
 
         # See if success
@@ -107,12 +112,14 @@ def acq_max(
     return np.clip(x_max, bounds[:, 0], bounds[:, 1])
 
 
-class UtilityFunction(object):
+class UtilityFunction:
     """
     An object to compute the acquisition functions.
     """
 
-    def __init__(self, kind, kappa, xi, kappa_decay=1, kappa_decay_delay=0):
+    def __init__(  # pylint:disable=too-many-arguments
+        self, kind, kappa, xi, kappa_decay=1, kappa_decay_delay=0
+    ):
 
         self.kappa = kappa
         self._kappa_decay = kappa_decay
@@ -125,26 +132,31 @@ class UtilityFunction(object):
         if kind not in ["ucb", "ei", "poi"]:
             err = (
                 "The utility function "
-                "{} has not been implemented, "
-                "please choose one of ucb, ei, or poi.".format(kind)
+                f"{kind} has not been implemented, "
+                "please choose one of ucb, ei, or poi."
             )
+
             raise NotImplementedError(err)
-        else:
-            self.kind = kind
+
+        self.kind = kind
 
     def update_params(self):
+        """update_params"""
         self._iters_counter += 1
 
         if self._kappa_decay < 1 and self._iters_counter > self._kappa_decay_delay:
             self.kappa *= self._kappa_decay
 
     def utility(self, x, gp, y_max):
+        """utility"""
         if self.kind == "ucb":
             return self._ucb(x, gp, self.kappa)
         if self.kind == "ei":
             return self._ei(x, gp, y_max, self.xi)
         if self.kind == "poi":
             return self._poi(x, gp, y_max, self.xi)
+
+        raise ValueError("Unknown value for kind")
 
     @staticmethod
     def _ucb(x, gp, kappa):
@@ -176,13 +188,12 @@ class UtilityFunction(object):
 
 def load_logs(optimizer, logs):
     """Load previous ..."""
-    import json
 
     if isinstance(logs, str):
         logs = [logs]
 
     for log in logs:
-        with open(log, "r") as j:
+        with open(log, "r", encoding="utf-8") as j:
             while True:
                 try:
                     iteration = next(j)

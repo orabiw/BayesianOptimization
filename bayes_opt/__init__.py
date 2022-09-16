@@ -1,3 +1,4 @@
+""" `bayes_opt` """
 from bayes_opt.bayesian_optimization import BayesianOptimization
 from bayes_opt.domain_reduction import SequentialDomainReductionTransformer
 from bayes_opt.event import Events

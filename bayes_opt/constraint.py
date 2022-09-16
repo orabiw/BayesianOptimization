@@ -1,7 +1,22 @@
+""" `bayes_opt.constraint` """
+# pylint: disable=invalid-name
 import numpy as np
 
 import scipy.stats
 from sklearn import gaussian_process
+
+
+def _basis_factory(random_state) -> gaussian_process.GaussianProcessRegressor:
+    def _basis():
+        return gaussian_process.GaussianProcessRegressor(
+            kernel=gaussian_process.kernels.Matern(nu=2.5),
+            alpha=1e-6,
+            normalize_y=True,
+            n_restarts_optimizer=5,
+            random_state=random_state,
+        )
+
+    return _basis
 
 
 class ConstraintModel:
@@ -50,25 +65,22 @@ class ConstraintModel:
         else:
             self._ub = ub
 
-        basis = lambda: gaussian_process.GaussianProcessRegressor(
-            kernel=gaussian_process.kernels.Matern(nu=2.5),
-            alpha=1e-6,
-            normalize_y=True,
-            n_restarts_optimizer=5,
-            random_state=random_state,
-        )
+        basis = _basis_factory(random_state)
         self._model = [basis() for _ in range(len(self._lb))]
 
     @property
     def lb(self):
+        """`lb`"""
         return self._lb
 
     @property
     def ub(self):
+        """`ub`"""
         return self._ub
 
     @property
     def model(self):
+        """`model`"""
         return self._model
 
     def eval(self, **kwargs):
@@ -123,21 +135,25 @@ class ConstraintModel:
             )
             result = p_upper - p_lower
             return result.reshape(X_shape[:-1])
-        else:
-            result = np.ones(X.shape[0])
-            for j, gp in enumerate(self._model):
-                y_mean, y_std = gp.predict(X, return_std=True)
-                p_lower = (
-                    scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._lb[j])
-                    if self._lb[j] != -np.inf
-                    else np.array([0])
-                )
-                p_upper = (
-                    scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._ub[j])
-                    if self._lb[j] != np.inf
-                    else np.array([1])
-                )
-                result = result * (p_upper - p_lower)
+
+        result = np.ones(X.shape[0])
+
+        for j, gp in enumerate(self._model):
+            y_mean, y_std = gp.predict(X, return_std=True)
+
+            p_lower = (
+                scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._lb[j])
+                if self._lb[j] != -np.inf
+                else np.array([0])
+            )
+
+            p_upper = (
+                scipy.stats.norm(loc=y_mean, scale=y_std).cdf(self._ub[j])
+                if self._lb[j] != np.inf
+                else np.array([1])
+            )
+
+            result = result * (p_upper - p_lower)
             return result.reshape(X_shape[:-1])
 
     def approx(self, X):
@@ -147,11 +163,12 @@ class ConstraintModel:
         """
         X_shape = X.shape
         X = X.reshape((-1, self._model[0].n_features_in_))
+
         if len(self._model) == 1:
             return self._model[0].predict(X).reshape(X_shape[:-1])
-        else:
-            result = np.column_stack([gp.predict(X) for gp in self._model])
-            return result.reshape(X_shape[:-1] + (len(self._lb),))
+
+        result = np.column_stack([gp.predict(X) for gp in self._model])
+        return result.reshape(X_shape[:-1] + (len(self._lb),))
 
     def allowed(self, constraint_values):
         """

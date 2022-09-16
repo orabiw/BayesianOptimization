@@ -27,17 +27,21 @@ class Observable:
         self._events = {event: {} for event in events}
 
     def get_subscribers(self, event):
+        """get_subscribers"""
         return self._events[event]
 
     def subscribe(self, event, subscriber, callback=None):
+        """subscribe"""
         if callback is None:
             callback = getattr(subscriber, "update")
         self.get_subscribers(event)[subscriber] = callback
 
     def unsubscribe(self, event, subscriber):
+        """unsubscribe"""
         del self.get_subscribers(event)[subscriber]
 
     def dispatch(self, event):
+        """dispatch"""
         for _, callback in self.get_subscribers(event).items():
             callback(event, self)
 
@@ -84,6 +88,8 @@ class BayesianOptimization(Observable):
     set_bounds()
         Allows changing the lower and upper searching bounds
     """
+
+    _space: target_space.BaseTargetSpace
 
     def __init__(  # pylint:disable=too-many-arguments,no-member
         self,
@@ -139,11 +145,13 @@ class BayesianOptimization(Observable):
         super().__init__(events=bayes_opt.event.DEFAULT_EVENTS)
 
     @property
-    def space(self) -> target_space.TargetSpace:
+    def space(self) -> target_space.BaseTargetSpace:
+        """space"""
         return self._space
 
     @property
     def constraint(self) -> t.Optional[bayes_opt.constraint.ConstraintModel]:
+        """constraint"""
         if self.is_constrained and isinstance(
             self._space, target_space.ConstrainedTargetSpace
         ):
@@ -153,10 +161,12 @@ class BayesianOptimization(Observable):
 
     @property
     def max(self) -> t.Dict[str, t.Any]:
+        """max"""
         return self._space.max()
 
     @property
     def res(self) -> t.Dict[str, t.Any]:
+        """res"""
         return self._space.res()
 
     def register(self, params, target):
@@ -195,7 +205,7 @@ class BayesianOptimization(Observable):
             warnings.simplefilter("ignore")
             self._gp.fit(self._space.params, self._space.target)
             if self.is_constrained:
-                self.constraint.fit(self._space.params, self._space._constraint_values)
+                self.constraint.fit(self._space.params, self._space.constraint_values)
 
         # Finding argmax of the acquisition function.
         suggestion = bayes_opt.util.acq_max(
@@ -218,8 +228,10 @@ class BayesianOptimization(Observable):
             self._queue.put(self._space.random_sample())
 
     def _prime_subscriptions(self):
-        if not any([len(subs) for subs in self._events.values()]):
-            _logger = logger._get_default_logger(self._verbose)
+        subscriptions = (len(subs) for subs in self._events.values())
+
+        if not any(subscriptions):
+            _logger = logger.get_default_logger(self._verbose)
             self.subscribe(bayes_opt.event.Events.OPTIMIZATION_START, _logger)
             self.subscribe(bayes_opt.event.Events.OPTIMIZATION_STEP, _logger)
             self.subscribe(bayes_opt.event.Events.OPTIMIZATION_END, _logger)

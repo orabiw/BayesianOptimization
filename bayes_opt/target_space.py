@@ -1,3 +1,5 @@
+""" `bayes_opt.target_space` """
+# pylint:disable=invalid-name
 import typing as t
 
 import numpy as np
@@ -11,21 +13,8 @@ def _hashable(x):
     return tuple(map(float, x))
 
 
-class TargetSpace:
-    """
-    Holds the param-space coordinates (X) and target values (Y)
-    Allows for constant-time appends while ensuring no duplicates are added
-
-    Example
-    -------
-    >>> def target_func(p1, p2):
-    >>>     return p1 + p2
-    >>> pbounds = {'p1': (0, 1), 'p2': (1, 100)}
-    >>> space = TargetSpace(target_func, pbounds, random_state=0)
-    >>> x = space.random_points(1)[0]
-    >>> y = space.register_point(x)
-    >>> assert self.max_point()['max_val'] == y
-    """
+class BaseTargetSpace:
+    """Base class to get around different no. of arguments in `register`"""
 
     def __init__(  # pylint:disable=no-member
         self,
@@ -75,46 +64,54 @@ class TargetSpace:
 
     @property
     def empty(self):
+        """empty"""
         return len(self) == 0
 
     @property
     def params(self):
+        """params"""
         return self._params
 
     @property
     def target(self):
+        """target"""
         return self._target
 
     @property
     def dim(self):
+        """dim"""
         return len(self._keys)
 
     @property
     def keys(self):
+        """keys"""
         return self._keys
 
     @property
     def bounds(self):
+        """bounds"""
         return self._bounds
 
     def params_to_array(self, params):
+        """params_to_array"""
         try:
             assert set(params) == set(self.keys)
-        except AssertionError:
+        except AssertionError as error:
             raise ValueError(
-                "Parameters' keys ({}) do ".format(sorted(params))
-                + "not match the expected set of keys ({}).".format(self.keys)
-            )
+                f"Parameters' keys ({sorted(params)}) do "
+                f"not match the expected set of keys ({self.keys})."
+            ) from error
         return np.asarray([params[key] for key in self.keys])
 
     def array_to_params(self, x):
+        """array_to_params"""
         try:
             assert len(x) == len(self.keys)
-        except AssertionError:
+        except AssertionError as error:
             raise ValueError(
-                "Size of array ({}) is different than the ".format(len(x))
-                + "expected number of parameters ({}).".format(len(self.keys))
-            )
+                f"Size of array ({len(x)}) is different than the "
+                f"expected number of parameters ({len(self.keys)})."
+            ) from error
         return dict(zip(self.keys, x))
 
     def _as_array(self, x):
@@ -126,84 +123,12 @@ class TargetSpace:
         x = x.ravel()
         try:
             assert x.size == self.dim
-        except AssertionError:
+        except AssertionError as error:
             raise ValueError(
-                "Size of array ({}) is different than the ".format(len(x))
-                + "expected number of parameters ({}).".format(len(self.keys))
-            )
+                f"Size of array ({len(x)}) is different than the "
+                f"expected number of parameters ({len(self.keys)})."
+            ) from error
         return x
-
-    def register(self, params, target):
-        """
-        Append a point and its target value to the known data.
-
-        Parameters
-        ----------
-        x : ndarray
-            a single point, with len(x) == self.dim
-
-        y : float
-            target function value
-
-        Raises
-        ------
-        KeyError:
-            if the point is not unique
-
-        Notes
-        -----
-        runs in ammortized constant time
-
-        Example
-        -------
-        >>> pbounds = {'p1': (0, 1), 'p2': (1, 100)}
-        >>> space = TargetSpace(lambda p1, p2: p1 + p2, pbounds)
-        >>> len(space)
-        0
-        >>> x = np.array([0, 0])
-        >>> y = 1
-        >>> space.add_observation(x, y)
-        >>> len(space)
-        1
-        """
-        x = self._as_array(params)
-        if x in self:
-            raise KeyError("Data point {} is not unique".format(x))
-
-        # Insert data into unique dictionary
-        self._cache[_hashable(x.ravel())] = target
-
-        self._params = np.concatenate([self._params, x.reshape(1, -1)])
-        self._target = np.concatenate([self._target, [target]])
-
-    def probe(self, params):
-        """
-        Evaulates a single point x, to obtain the value y and then records them
-        as observations.
-
-        Notes
-        -----
-        If x has been previously seen returns a cached value of y.
-
-        Parameters
-        ----------
-        x : ndarray
-            a single point, with len(x) == self.dim
-
-        Returns
-        -------
-        y : float
-            target function value.
-        """
-        x = self._as_array(params)
-
-        try:
-            target = self._cache[_hashable(x)]
-        except KeyError:
-            params = dict(zip(self._keys, x))
-            target = self.target_func(**params)
-            self.register(x, target)
-        return target
 
     def random_sample(self):
         """
@@ -261,7 +186,96 @@ class TargetSpace:
                 self._bounds[row] = new_bounds[key]
 
 
-class ConstrainedTargetSpace(TargetSpace):
+class TargetSpace(BaseTargetSpace):
+    """
+    Holds the param-space coordinates (X) and target values (Y)
+    Allows for constant-time appends while ensuring no duplicates are added
+
+    Example
+    -------
+    >>> def target_func(p1, p2):
+    >>>     return p1 + p2
+    >>> pbounds = {'p1': (0, 1), 'p2': (1, 100)}
+    >>> space = TargetSpace(target_func, pbounds, random_state=0)
+    >>> x = space.random_points(1)[0]
+    >>> y = space.register_point(x)
+    >>> assert self.max_point()['max_val'] == y
+    """
+
+    def probe(self, params):
+        """
+        Evaulates a single point x, to obtain the value y and then records them
+        as observations.
+
+        Notes
+        -----
+        If x has been previously seen returns a cached value of y.
+
+        Parameters
+        ----------
+        x : ndarray
+            a single point, with len(x) == self.dim
+
+        Returns
+        -------
+        y : float
+            target function value.
+        """
+        x = self._as_array(params)
+
+        try:
+            target = self._cache[_hashable(x)]
+        except KeyError:
+            params = dict(zip(self._keys, x))
+            target = self.target_func(**params)
+            self.register(x, target)
+        return target
+
+    def register(self, params, target):
+        """
+        Append a point and its target value to the known data.
+
+        Parameters
+        ----------
+        x : ndarray
+            a single point, with len(x) == self.dim
+
+        y : float
+            target function value
+
+        Raises
+        ------
+        KeyError:
+            if the point is not unique
+
+        Notes
+        -----
+        runs in ammortized constant time
+
+        Example
+        -------
+        >>> pbounds = {'p1': (0, 1), 'p2': (1, 100)}
+        >>> space = TargetSpace(lambda p1, p2: p1 + p2, pbounds)
+        >>> len(space)
+        0
+        >>> x = np.array([0, 0])
+        >>> y = 1
+        >>> space.add_observation(x, y)
+        >>> len(space)
+        1
+        """
+        x = self._as_array(params)
+        if x in self:
+            raise KeyError(f"Data point {x} is not unique")
+
+        # Insert data into unique dictionary
+        self._cache[_hashable(x.ravel())] = target
+
+        self._params = np.concatenate([self._params, x.reshape(1, -1)])
+        self._target = np.concatenate([self._target, [target]])
+
+
+class ConstrainedTargetSpace(BaseTargetSpace):
     """
     Expands TargetSpace to incorporate constraints.
     """
@@ -287,16 +301,19 @@ class ConstrainedTargetSpace(TargetSpace):
 
     @property
     def constraint(self):
+        """constraint"""
         return self._constraint
 
     @property
     def constraint_values(self):
+        """constraint_values"""
         return self._constraint_values
 
     def register(self, params, target, constraint_value):
+        """register"""
         x = self._as_array(params)
         if x in self:
-            raise KeyError("Data point {} is not unique".format(x))
+            raise KeyError(f"Data point {x} is not unique")
 
         # Insert data into unique dictionary
         self._cache[_hashable(x.ravel())] = (target, constraint_value)
@@ -308,6 +325,7 @@ class ConstrainedTargetSpace(TargetSpace):
         )
 
     def probe(self, params):
+        """probe"""
         x = self._as_array(params)
 
         try:
@@ -326,8 +344,8 @@ class ConstrainedTargetSpace(TargetSpace):
         if allowed.any():
             # Getting of all points that fulfill the constraints, find the
             # one with the maximum value for the target function.
-            sorted = np.argsort(self.target)
-            idx = sorted[allowed[sorted]][-1]
+            sorted_ = np.argsort(self.target)
+            idx = sorted_[allowed[sorted_]][-1]
             # there must be a better way to do this, right?
             res = {
                 "target": self.target[idx],

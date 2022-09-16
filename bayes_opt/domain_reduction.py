@@ -1,49 +1,65 @@
-from typing import Optional, Union, List
+""" `bayes_opt.domain_reduction` """
+# pylint: disable=invalid-name
+import abc
+import typing as t
 
 import numpy as np
 import bayes_opt.target_space
 
 
-class DomainTransformer:
+class DomainTransformer(abc.ABC):
     """The base transformer class"""
 
-    def __init__(self, **kwargs):
-        pass
-
-    def initialize(self, target_space: bayes_opt.target_space.TargetSpace):
+    @abc.abstractmethod
+    def initialize(self, target_space: bayes_opt.target_space.BaseTargetSpace):
+        """initialize"""
         raise NotImplementedError
 
-    def transform(self, target_space: bayes_opt.target_space.TargetSpace):
+    @abc.abstractmethod
+    def transform(self, target_space: bayes_opt.target_space.BaseTargetSpace):
+        """transform"""
         raise NotImplementedError
 
 
 class SequentialDomainReductionTransformer(DomainTransformer):
+    # pylint:disable=too-many-instance-attributes
     """
     A sequential domain reduction transformer bassed on the work by Stander, N. and Craig, K:
     "On the robustness of a simple domain reduction scheme for simulation‐based optimization"
     """
+
+    minimum_window: t.Sequence
+    original_bounds: np.ndarray
+    bounds: t.List[np.ndarray]
+    previous_optimal: np.ndarray
+    current_optimal: np.ndarray
+    r: np.ndarray
+    previous_d: np.ndarray
+    current_d: np.ndarray
+    c: np.ndarray
+    c_hat: np.ndarray
+    gamma: np.ndarray
+    contraction_rate: np.ndarray
 
     def __init__(
         self,
         gamma_osc: float = 0.7,
         gamma_pan: float = 1.0,
         eta: float = 0.9,
-        minimum_window: Optional[Union[List[Optional[float]], float]] = 0.0,
+        minimum_window: t.Optional[t.Union[t.List[t.Optional[float]], float]] = 0.0,
     ) -> None:
         self.gamma_osc = gamma_osc
         self.gamma_pan = gamma_pan
         self.eta = eta
         self.minimum_window_value = minimum_window
 
-    def initialize(self, target_space: bayes_opt.target_space.TargetSpace) -> None:
+    def initialize(self, target_space: bayes_opt.target_space.BaseTargetSpace) -> None:
         """Initialize all of the parameters"""
         self.original_bounds = np.copy(target_space.bounds)
         self.bounds = [self.original_bounds]
 
         # Set the minimum window to an array of length bounds
-        if isinstance(self.minimum_window_value, list) or isinstance(
-            self.minimum_window_value, np.ndarray
-        ):
+        if isinstance(self.minimum_window_value, (list, np.ndarray)):
             assert len(self.minimum_window_value) == len(target_space.bounds)
             self.minimum_window = self.minimum_window_value
         else:
@@ -70,7 +86,7 @@ class SequentialDomainReductionTransformer(DomainTransformer):
 
         self.r = self.contraction_rate * self.r
 
-    def _update(self, target_space: bayes_opt.target_space.TargetSpace) -> None:
+    def _update(self, target_space: bayes_opt.target_space.BaseTargetSpace) -> None:
 
         # setting the previous
         self.previous_optimal = self.current_optimal
@@ -114,7 +130,7 @@ class SequentialDomainReductionTransformer(DomainTransformer):
     def _create_bounds(self, parameters: dict, bounds: np.ndarray) -> dict:
         return {param: bounds[i, :] for i, param in enumerate(parameters)}
 
-    def transform(self, target_space: bayes_opt.target_space.TargetSpace) -> dict:
+    def transform(self, target_space: bayes_opt.target_space.BaseTargetSpace) -> dict:
 
         self._update(target_space)
 

@@ -1,17 +1,24 @@
 """
 observers...
 """
+import abc
 from datetime import datetime
 
 import bayes_opt.event
 
 
-class Observer:
+class Observer(abc.ABC):  # pylint:disable=too-few-public-methods
+    """`Observer` class"""
+
+    @abc.abstractmethod
     def update(self, event, instance):
+        """`Observer.update`"""
         raise NotImplementedError
 
 
-class _Tracker(object):
+class Tracker:  # pylint:disable=too-few-public-methods
+    """Tracker"""
+
     def __init__(self):
         self._iterations = 0
 
@@ -46,3 +53,7 @@ class _Tracker(object):
             time_elapsed.total_seconds(),
             time_delta.total_seconds(),
         )
+
+
+class _Tracker(Tracker):  # pylint:disable=too-few-public-methods
+    pass

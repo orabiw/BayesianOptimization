@@ -1,3 +1,5 @@
+""" `bayes_opt.logger` """
+# pylint:disable=invalid-name
 from __future__ import print_function
 import os
 import json
@@ -7,21 +9,25 @@ import bayes_opt.event
 import bayes_opt.util
 
 
-def _get_default_logger(verbose):
+def get_default_logger(verbose):
+    """get_default_logger"""
     return ScreenLogger(verbose=verbose)
 
 
-class ScreenLogger(bayes_opt.observer._Tracker):
+class ScreenLogger(bayes_opt.observer.Tracker):
+    """ScreenLogger"""
+
     _default_cell_size = 9
     _default_precision = 4
 
     def __init__(self, verbose=2):
         self._verbose = verbose
         self._header_length = None
-        super(ScreenLogger, self).__init__()
+        super().__init__()
 
     @property
     def verbose(self):
+        """verbose"""
         return self._verbose
 
     @verbose.setter
@@ -30,28 +36,23 @@ class ScreenLogger(bayes_opt.observer._Tracker):
 
     def _format_number(self, x):
         if isinstance(x, int):
-            s = "{x:<{s}}".format(
-                x=x,
-                s=self._default_cell_size,
-            )
+            s = f"{x:<{self._default_cell_size}}"
         else:
-            s = "{x:<{s}.{p}}".format(
-                x=x,
-                s=self._default_cell_size,
-                p=self._default_precision,
-            )
+            s = f"{x:<{self._default_cell_size}.{self._default_precision}}"
 
         if len(s) > self._default_cell_size:
             if "." in s:
                 return s[: self._default_cell_size]
-            else:
-                return s[: self._default_cell_size - 3] + "..."
+            return s[: self._default_cell_size - 3] + "..."
+
         return s
 
     def _format_key(self, key):
-        s = "{key:^{s}}".format(key=key, s=self._default_cell_size)
+        s = f"{key:^{self._default_cell_size}}"
+
         if len(s) > self._default_cell_size:
             return s[: self._default_cell_size - 3] + "..."
+
         return s
 
     def _step(self, instance, colour=bayes_opt.util.Colours.black):
@@ -88,6 +89,7 @@ class ScreenLogger(bayes_opt.observer._Tracker):
         return instance.max["target"] > self._previous_max
 
     def update(self, event, instance):
+        """update"""
         if event == bayes_opt.event.Events.OPTIMIZATION_START:
             line = self._header(instance) + "\n"
         elif event == bayes_opt.event.Events.OPTIMIZATION_STEP:
@@ -109,7 +111,9 @@ class ScreenLogger(bayes_opt.observer._Tracker):
         self._update_tracker(event, instance)
 
 
-class JSONLogger(bayes_opt.observer._Tracker):
+class JSONLogger(bayes_opt.observer.Tracker):  # pylint:disable=too-few-public-methods
+    """JSONLogger"""
+
     def __init__(self, path, reset=True):
         self._path = path if path[-5:] == ".json" else path + ".json"
         if reset:
@@ -117,9 +121,11 @@ class JSONLogger(bayes_opt.observer._Tracker):
                 os.remove(self._path)
             except OSError:
                 pass
-        super(JSONLogger, self).__init__()
+
+        super().__init__()
 
     def update(self, event, instance):
+        """update"""
         if event == bayes_opt.event.Events.OPTIMIZATION_STEP:
             data = dict(instance.res[-1])
 
@@ -130,7 +136,7 @@ class JSONLogger(bayes_opt.observer._Tracker):
                 "delta": time_delta,
             }
 
-            with open(self._path, "a") as f:
+            with open(self._path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(data) + "\n")
 
         self._update_tracker(event, instance)
