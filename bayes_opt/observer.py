@@ -21,7 +21,7 @@ class Observer(abc.ABC):  # pylint:disable=too-few-public-methods
         self,
         event: bayes_opt.event.Events,
         instance: bayes_opt.bayesian_optimization.BayesianOptimization,
-    ):
+    ) -> None:
         """`Observer.update`"""
         raise NotImplementedError
 
