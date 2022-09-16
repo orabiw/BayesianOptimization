@@ -28,7 +28,8 @@ class Tracker:  # pylint:disable=too-few-public-methods
         self._start_time = None
         self._previous_time = None
 
-    def _update_tracker(self, event, instance):
+    def update_tracker(self, event, instance):
+        """update_tracker"""
         if event == bayes_opt.event.Events.OPTIMIZATION_STEP:
             self._iterations += 1
 
@@ -37,7 +38,8 @@ class Tracker:  # pylint:disable=too-few-public-methods
                 self._previous_max = current_max["target"]
                 self._previous_max_params = current_max["params"]
 
-    def _time_metrics(self):
+    def time_metrics(self):
+        """time_metrics"""
         now = datetime.now()
         if self._start_time is None:
             self._start_time = now

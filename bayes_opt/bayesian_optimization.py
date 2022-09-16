@@ -1,4 +1,4 @@
-""" . """
+""" `bayes_opt.bayesian_optimization` """
 import typing as t
 import warnings
 from queue import Queue, Empty

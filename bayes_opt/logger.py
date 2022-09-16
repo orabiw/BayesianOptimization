@@ -108,7 +108,8 @@ class ScreenLogger(bayes_opt.observer.Tracker):
 
         if self._verbose:
             print(line, end="")
-        self._update_tracker(event, instance)
+
+        self.update_tracker(event, instance)
 
 
 class JSONLogger(bayes_opt.observer.Tracker):  # pylint:disable=too-few-public-methods
@@ -129,7 +130,7 @@ class JSONLogger(bayes_opt.observer.Tracker):  # pylint:disable=too-few-public-m
         if event == bayes_opt.event.Events.OPTIMIZATION_STEP:
             data = dict(instance.res[-1])
 
-            now, time_elapsed, time_delta = self._time_metrics()
+            now, time_elapsed, time_delta = self.time_metrics()
             data["datetime"] = {
                 "datetime": now,
                 "elapsed": time_elapsed,
@@ -139,4 +140,4 @@ class JSONLogger(bayes_opt.observer.Tracker):  # pylint:disable=too-few-public-m
             with open(self._path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(data) + "\n")
 
-        self._update_tracker(event, instance)
+        self.update_tracker(event, instance)
