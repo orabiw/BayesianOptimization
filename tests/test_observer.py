@@ -1,5 +1,5 @@
 from bayes_opt.bayesian_optimization import Observable
-from bayes_opt.observer import _Tracker
+from bayes_opt.observer import Tracker
 from bayes_opt.event import Events
 import os
 
@@ -76,7 +76,7 @@ def test_tracker():
         def max(self):
             return {"target": self._max_target, "params": self._max_params}
 
-    tracker = _Tracker()
+    tracker = Tracker()
     assert tracker._iterations == 0
     assert tracker._previous_max is None
     assert tracker._previous_max_params is None
