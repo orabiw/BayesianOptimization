@@ -1,31 +1,70 @@
 """ `bayes_opt.domain_reduction` """
 # pylint: disable=invalid-name
-import abc
 import typing as t
 
 import numpy as np
 import bayes_opt.target_space
 
 
-class DomainTransformer(abc.ABC):
+def trim_bounds(
+    bounds: np.ndarray,
+    global_bounds: np.ndarray,
+    minimum_window: t.Sequence[float],
+) -> np.ndarray:
+    """not the best name"""
+    del global_bounds  # not used
+
+    bounds = np.copy(bounds)
+
+    # The below code block existed in the origianl code but it's not affecting any
+    # variables as it changes the variables defined in the loop but noot the actual
+    # bounds, keeping it here for reference.
+    # for i, variable in enumerate(bounds):
+    #     if variable[0] < global_bounds[i, 0]:
+    #         variable[0] = global_bounds[i, 0]
+    #     if variable[1] > global_bounds[i, 1]:
+    #         variable[1] = global_bounds[i, 1]
+
+    for i, variable in enumerate(bounds):
+        lower, upper = variable
+
+        window_width = abs(lower - upper)
+
+        if lower > upper:
+            lower, upper = upper, lower
+
+        half_delta = (minimum_window[i] - window_width) / 2.0
+
+        if window_width < minimum_window[i]:
+            lower -= half_delta
+            upper += half_delta
+
+        bounds[i, 0] = lower
+        bounds[i, 1] = upper
+
+    return bounds
+
+
+def _current_d(current_optimal, previous_optimal, r):
+    return 2.0 * (current_optimal - previous_optimal) / r
+
+
+class DomainTransformer(t.Protocol):
     """The base transformer class"""
 
-    @abc.abstractmethod
     def initialize(self, target_space: bayes_opt.target_space.BaseTargetSpace):
         """initialize"""
-        raise NotImplementedError
 
-    @abc.abstractmethod
     def transform(self, target_space: bayes_opt.target_space.BaseTargetSpace):
         """transform"""
-        raise NotImplementedError
 
 
-class SequentialDomainReductionTransformer(DomainTransformer):
+class SequentialDomainReductionTransformer:
     # pylint:disable=too-many-instance-attributes
     """
-    A sequential domain reduction transformer bassed on the work by Stander, N. and Craig, K:
-    "On the robustness of a simple domain reduction scheme for simulation‐based optimization"
+    A sequential domain reduction transformer bassed on the work by Stander, N. and
+    Craig, K: "On the robustness of a simple domain reduction scheme for
+    simulation‐based optimization"
     """
 
     minimum_window: t.Sequence
@@ -33,7 +72,7 @@ class SequentialDomainReductionTransformer(DomainTransformer):
     bounds: t.List[np.ndarray]
     previous_optimal: np.ndarray
     current_optimal: np.ndarray
-    r: np.ndarray
+    bounds_range: np.ndarray
     previous_d: np.ndarray
     current_d: np.ndarray
     c: np.ndarray
@@ -60,19 +99,31 @@ class SequentialDomainReductionTransformer(DomainTransformer):
 
         # Set the minimum window to an array of length bounds
         if isinstance(self.minimum_window_value, (list, np.ndarray)):
-            assert len(self.minimum_window_value) == len(target_space.bounds)
+            if len(self.minimum_window_value) != len(target_space.bounds):
+                raise ValueError(
+                    "`minimum_window_value` does not equal `target_space.bounds`"
+                )
+
             self.minimum_window = self.minimum_window_value
         else:
             self.minimum_window = [self.minimum_window_value] * len(target_space.bounds)
 
-        self.previous_optimal = np.mean(target_space.bounds, axis=1)
-        self.current_optimal = np.mean(target_space.bounds, axis=1)
-        self.r = target_space.bounds[:, 1] - target_space.bounds[:, 0]
+        optimal_bounds = np.mean(target_space.bounds, axis=1)
+        self.previous_optimal = optimal_bounds
+        self.current_optimal = optimal_bounds
 
-        self.previous_d = 2.0 * (self.current_optimal - self.previous_optimal) / self.r
+        self.bounds_range = target_space.bounds[:, 1] - target_space.bounds[:, 0]
 
-        self.current_d = 2.0 * (self.current_optimal - self.previous_optimal) / self.r
+        d_value = _current_d(
+            self.current_optimal, self.previous_optimal, self.bounds_range
+        )
 
+        self.previous_d = d_value
+        self.current_d = d_value
+
+        self._calc_values()
+
+    def _calc_values(self):
         self.c = self.current_d * self.previous_d
         self.c_hat = np.sqrt(np.abs(self.c)) * np.sign(self.c)
 
@@ -84,60 +135,29 @@ class SequentialDomainReductionTransformer(DomainTransformer):
             self.gamma - self.eta
         )
 
-        self.r = self.contraction_rate * self.r
+        self.bounds_range = self.contraction_rate * self.bounds_range
 
-    def _update(self, target_space: bayes_opt.target_space.BaseTargetSpace) -> None:
-
+    def transform(self, target_space: bayes_opt.target_space.BaseTargetSpace) -> dict:
         # setting the previous
         self.previous_optimal = self.current_optimal
         self.previous_d = self.current_d
 
         self.current_optimal = target_space.params[np.argmax(target_space.target)]
-
-        self.current_d = 2.0 * (self.current_optimal - self.previous_optimal) / self.r
-
-        self.c = self.current_d * self.previous_d
-
-        self.c_hat = np.sqrt(np.abs(self.c)) * np.sign(self.c)
-
-        self.gamma = 0.5 * (
-            self.gamma_pan * (1.0 + self.c_hat) + self.gamma_osc * (1.0 - self.c_hat)
+        self.current_d = _current_d(
+            self.current_optimal, self.previous_optimal, self.bounds_range
         )
 
-        self.contraction_rate = self.eta + np.abs(self.current_d) * (
-            self.gamma - self.eta
-        )
+        self._calc_values()
 
-        self.r = self.contraction_rate * self.r
-
-    def _trim(self, new_bounds: np.ndarray, global_bounds: np.ndarray) -> np.ndarray:
-        for i, variable in enumerate(new_bounds):
-            if variable[0] < global_bounds[i, 0]:
-                variable[0] = global_bounds[i, 0]
-            if variable[1] > global_bounds[i, 1]:
-                variable[1] = global_bounds[i, 1]
-        for i, entry in enumerate(new_bounds):
-            if entry[0] > entry[1]:
-                new_bounds[i, 0] = entry[1]
-                new_bounds[i, 1] = entry[0]
-            window_width = abs(entry[0] - entry[1])
-            if window_width < self.minimum_window[i]:
-                new_bounds[i, 0] -= (self.minimum_window[i] - window_width) / 2.0
-                new_bounds[i, 1] += (self.minimum_window[i] - window_width) / 2.0
-
-        return new_bounds
-
-    def _create_bounds(self, parameters: dict, bounds: np.ndarray) -> dict:
-        return {param: bounds[i, :] for i, param in enumerate(parameters)}
-
-    def transform(self, target_space: bayes_opt.target_space.BaseTargetSpace) -> dict:
-
-        self._update(target_space)
-
-        new_bounds = np.array(
-            [self.current_optimal - 0.5 * self.r, self.current_optimal + 0.5 * self.r]
+        half_r = 0.5 * self.bounds_range
+        bounds = np.array(
+            [
+                self.current_optimal - half_r,
+                self.current_optimal + half_r,
+            ]
         ).T
 
-        self._trim(new_bounds, self.original_bounds)
-        self.bounds.append(new_bounds)
-        return self._create_bounds(target_space.keys, new_bounds)
+        bounds = trim_bounds(bounds, self.original_bounds, self.minimum_window)
+        self.bounds.append(bounds)
+
+        return {param: bounds[i, :] for i, param in enumerate(target_space.keys)}
